@@ -1,7 +1,7 @@
 project('xapian-glib', 'c', 'cpp',
         version: '1.7.1',
         license: 'GPLv2.0+',
-        meson_version: '>= 0.43.0',
+        meson_version: '>= 0.56.0',
         default_options: [
           'warning_level=1',
           'buildtype=debugoptimized',
@@ -23,6 +23,7 @@ xapian_glib_binary_age = 100 * xapian_glib_minor_version + xapian_glib_micro_ver
 
 soversion = 0
 libversion = '@0@.@1@.@2@'.format(soversion, xapian_glib_binary_age - xapian_glib_interface_age, xapian_glib_interface_age)
+darwin_versions = ['1', '1.0']
 
 # Paths
 xapian_glib_prefix = get_option('prefix')
@@ -41,7 +42,7 @@ common_cflags = []
 common_ldflags = []
 xapian_glib_debug_cflags = []
 
-if cpp.get_id() == 'gcc' or cpp.get_id() == 'clang'
+if cpp.get_id() in ['gcc', 'clang']
   test_cflags = [
     '-fno-strict-aliasing',
     '-Wpointer-arith',
@@ -56,7 +57,6 @@ if cpp.get_id() == 'gcc' or cpp.get_id() == 'clang'
     '-Wno-shadow',
     '-Werror=format=2',
     '-Werror=redundant-decls',
-    '-Werror=implicit',
     '-Werror=nonnull',
     '-Werror=init-self',
     '-Werror=main',
@@ -68,7 +68,6 @@ if cpp.get_id() == 'gcc' or cpp.get_id() == 'clang'
     '-Werror=write-strings',
     '-Werror=address',
     '-Werror=int-to-pointer-cast',
-    '-Werror=pointer-to-int-cast',
     '-Werror=empty-body',
     '-Werror=write-strings',
     '-Werror=undef',
@@ -83,38 +82,29 @@ else
 endif
 
 # Symbol visibility
-visibility_cflags = []
 if get_option('default_library') != 'static'
   if host_machine.system() == 'windows'
     xapian_glib_conf.set('DLL_EXPORT', true)
     xapian_glib_conf.set('_XAPIAN_GLIB_EXTERN', '__declspec(dllexport) extern')
-    if cc.get_id() != 'msvc'
-      visibility_cflags += '-fvisibility=hidden'
-    endif
   else
     xapian_glib_conf.set('_XAPIAN_GLIB_EXTERN', '__attribute__((visibility("default"))) extern')
-    visibility_cflags += [ '-fvisibility=hidden', '-fvisibility-inlines-hidden' ]
   endif
 endif
 
 # Check all compiler flags
-foreach cflag: test_cflags
-  if cpp.has_argument(cflag)
-    common_cflags += cflag
-  endif
-endforeach
+common_cflags += cpp.get_supported_arguments(test_cflags)
 
 # Linker flags
 if host_machine.system() == 'linux'
-  foreach ldflag: [ '-Wl,-Bsymbolic', '-Wl,-z,relro', '-Wl,-z,now', ]
-    if cpp.has_argument(ldflag)
-      common_ldflags += ldflag
-    endif
-  endforeach
+  common_ldflags += cpp.get_supported_link_arguments([
+    '-Wl,-Bsymbolic',
+    '-Wl,-z,relro',
+    '-Wl,-z,now',
+  ])
 elif host_machine.system() == 'windows'
-  common_ldflags += '-no-undefined'
-elif host_machine.system() == 'darwin'
-  common_ldflags += [ '-compatibility_version 1', '-current_version 1.0' ]
+  common_ldflags += cpp.get_supported_link_arguments([
+    '-no-undefined',
+  ])
 endif
 
 # TODO: We may want a configuration argument to add `G_DISABLE_CHECKS`
